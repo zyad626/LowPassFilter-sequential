@@ -23,7 +23,42 @@ struct Filter
 
 int* blur(Filter filter, int* image, int width, int height);
 
-int* inputImage(int* w, int* h, System::String^ imagePath) //put the size of image in w & h
+int* create_padded_image(int* w, int* h , int filter_size) {
+	int extra_rows_cols = (filter_size / 2);
+	int height_new = *h + extra_rows_cols * 2;
+	int width_new  = *w + extra_rows_cols * 2;
+
+	int* img = new int[height_new * width_new];
+
+	//add zeros to the upper rows only but with full width
+	for (int i = 0; i < extra_rows_cols; i++) {
+		for (int j = 0; j < width_new; j++) {
+			img[i * width_new + j] = 0;
+		}
+	}
+	//add zeros to the lower rows only but with full width
+	for (int i = *h; i < (*h + extra_rows_cols); i++) {
+		for (int j = 0; j < width_new; j++) {
+			img[i * width_new + j] = 0;
+		}
+	}
+	//add zeros to the left columns only but with full height
+	for (int i = extra_rows_cols; i < (height_new - extra_rows_cols); i++) {
+		for (int j = 0; j < extra_rows_cols; j++) {
+			img[i * width_new + j] = 0;
+		}
+	}
+	//add zeros to the right most columns only but with full height
+	for (int i = extra_rows_cols; i < (height_new - extra_rows_cols); i++) {
+		for (int j = *w; j < (*w + extra_rows_cols); j++) {
+			img[i * width_new + j] = 0;
+		}
+	}
+	*w = width_new; *h = height_new;
+	return img;
+}
+
+int* inputImage(int* w, int* h, System::String^ imagePath, int filter_size) //put the size of image in w & h
 {
 	int* input;
 
@@ -39,10 +74,15 @@ int* inputImage(int* w, int* h, System::String^ imagePath) //put the size of ima
 	OriginalImageHeight = BM.Height;
 	*w = BM.Width;
 	*h = BM.Height;
+
+
+	int extra_rows_cols = (filter_size / 2);
 	int *Red = new int[BM.Height * BM.Width];
 	int *Green = new int[BM.Height * BM.Width];
 	int *Blue = new int[BM.Height * BM.Width];
-	input = new int[BM.Height*BM.Width];
+	//this function modifies the width and height
+	input = create_padded_image(w, h, filter_size);
+
 	for (int i = 0; i < BM.Height; i++)
 	{
 		for (int j = 0; j < BM.Width; j++)
@@ -53,7 +93,7 @@ int* inputImage(int* w, int* h, System::String^ imagePath) //put the size of ima
 			Blue[i * BM.Width + j] = c.B;
 			Green[i * BM.Width + j] = c.G;
 
-			input[i*BM.Width + j] = ((c.R + c.B + c.G) / 3); //gray scale value equals the average of RGB values
+			input[(i + extra_rows_cols) * (*w) + (j + extra_rows_cols)] = ((c.R + c.B + c.G) / 3); //gray scale value equals the average of RGB values
 
 		}
 
@@ -91,16 +131,13 @@ void createImage(int* image, int width, int height, int index)
 
 int main()
 {
-	int ImageWidth = 4, ImageHeight = 4;
+	int ImageWidth_padded = 4, ImageHeight_padded = 4;
 
 	int start_s, stop_s, TotalTime = 0;
 
 	System::String^ imagePath;
 	std::string img;
 	img = "..//Data//Input//lena.png";
-
-	imagePath = marshal_as<System::String^>(img);
-	int* imageData = inputImage(&ImageWidth, &ImageHeight, imagePath);
 
 	Filter filter;
 	cout << "Enter kernel size (must be an odd number)" << endl;
@@ -114,26 +151,34 @@ int main()
 			filter.data[i * filter.size + j] = 1;
 		}
 	}
+
+	imagePath = marshal_as<System::String^>(img);
+	int* imageData = inputImage(&ImageWidth_padded, &ImageHeight_padded, imagePath, filter.size);
+
+
 	start_s = clock();
 
-	cout << "Image width = " << ImageWidth << "\n" << "Image height = " << ImageHeight << endl;
-	int* output_img = blur(filter, imageData, ImageWidth, ImageHeight);
+	cout << "Image width = " << ImageWidth_padded << "\n" << "Image height = " << ImageHeight_padded << endl;
+	//createImage(imageData, ImageWidth_padded, ImageHeight_padded , 1);
+	//return 0;
+	int* output_img = blur(filter, imageData, ImageWidth_padded, ImageHeight_padded);
 	stop_s = clock();
 	TotalTime += (stop_s - start_s) / double(CLOCKS_PER_SEC) * 1000;
-	createImage(output_img, (ImageWidth - (filter.size / 2) * 2), (ImageHeight - (filter.size / 2) * 2), 1);
+	createImage(output_img, (ImageWidth_padded - (filter.size / 2) * 2), (ImageHeight_padded - (filter.size / 2) * 2), 1);
 	cout << "time: " << TotalTime << endl;
 	
 	free(output_img);
+	
 	free(imageData);
 	free(filter.data);
 
 }
 
 int* blur(Filter filter, int* image, int width, int height) {
-	int new_hieght = (height - (filter.size / 2) * 2); //this is an integer division which means that the 2s don't cancel each other
-	int new_width = (width - (filter.size / 2) * 2);
+	int original_hieght = (height - (filter.size / 2) * 2); //this is an integer division which means that the 2s don't cancel each other
+	int original_width = (width - (filter.size / 2) * 2);
 
-	int* output = new int[new_hieght * new_width];
+	int* output = new int[original_hieght * original_width];
 	//int offset = 5 / 2;
 
 	for (int i = 0; i < height - filter.size; i++) {
@@ -144,7 +189,7 @@ int* blur(Filter filter, int* image, int width, int height) {
 					sop += filter.data[h * filter.size + w] * image[(i + h)*width + (j + w)];
 				}
 			}
-			output[i * new_width + j] = sop / (filter.size * filter.size);
+			output[i * original_width + j] = sop / (filter.size * filter.size);
 		}
 	}
 	return output;
