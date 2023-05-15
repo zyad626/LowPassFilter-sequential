@@ -27,7 +27,7 @@ struct Image_struct {
 #include <iomanip>
 
 void blur(Filter filter, Image_struct input_img, Image_struct* output_img);
-
+Image_struct add_zero_padding(Image_struct input_img, int filter_size);
 
 int* inputImage(int* w, int* h, System::String^ imagePath) //put the size of image in w & h
 {
@@ -125,9 +125,12 @@ int main()
 
 	cout << "input Image width = " << input_img.width << "\n" << "input Image height = " << input_img.height << endl;
 
+	//add zero padding to input image
+	Image_struct padded_img = add_zero_padding(input_img, filter.size);
+
 	//blur the image
 	Image_struct* output_img = new Image_struct();
-	blur(filter, input_img, output_img);
+	blur(filter, padded_img, output_img);
 	cout << "output Image width = " << output_img->width << "\n" << "output Image height = " << output_img->height << endl;
 
 	stop_s = clock();
@@ -140,10 +143,12 @@ int main()
 	cout << "time: " << TotalTime << endl;
 	
 	//free all allocated memory
-	free(output_img->data);
-	free(input_img.data);
-	free(filter.data);
-
+	delete output_img->data;
+	delete output_img;
+	delete input_img.data;
+	delete filter.data;
+	delete padded_img.data;
+	int c; cin >> c;
 	return 0;
 
 }
@@ -165,4 +170,22 @@ void blur(Filter filter, Image_struct input_img, Image_struct* output_img) {
 			output_img->data[i * output_img->width + j] = sop / (filter.size * filter.size);
 		}
 	}
+}
+Image_struct add_zero_padding(Image_struct input_img, int filter_size) {
+	Image_struct padded_img;
+	padded_img.height = input_img.height + filter_size - 1;
+	padded_img.width = input_img.width + filter_size - 1;
+	padded_img.data = new int[padded_img.height * padded_img.width];
+	/* by default the padded image is initialized with zeros. We just have to fill in with the input image */
+	int input_img_start_row = (filter_size - 1) / 2;//where the input image should start inside the padded image
+	int input_img_start_col = (filter_size - 1) / 2;
+	for (int i = 0; i < input_img.height; i++) {
+		for (int j = 0; j < input_img.width; j++) {
+			padded_img.data[(i + input_img_start_row) * padded_img.width + (j + input_img_start_col)]
+				= input_img.data[i * input_img.width + j];
+		}
+	}
+	cout << "Padded image height and width = " << padded_img.height << endl;
+	
+	return padded_img;
 }
